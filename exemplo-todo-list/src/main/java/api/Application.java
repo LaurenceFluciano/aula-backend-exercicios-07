@@ -4,6 +4,7 @@ package api;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -28,37 +29,55 @@ public class Application {
         SpringApplication.run(Application.class, args);
     }
 
-    public enum TarefaStatusEnum {
-        PENDENTE,
-        FAZENDO,
-        CONCLUIDA
-    }
+    // DTOs
 
-    public class Tarefa {
-        private int id;
-        private String title;
-        private String description;
+    public record TarefaCriarRequest(
+            String title,
+            String description,
+            TarefaStatusEnum status
+    ) {};
 
-        public Tarefa(int id, String title, String description, TarefaStatusEnum status) {
+    public record TarefaAtualizarParcialmenteRequest(
+            String title,
+            String description,
+            TarefaStatusEnum status
+    ) {};
 
-        }
-    };
+    public record TarefaResponse(
+            int id,
+            String title,
+            String description,
+            TarefaStatusEnum status
+    ) {};
 
-    public record TarefaRequest(String title, String description, TarefaStatusEnum status) {};
-
-    public record TarefaAtualizarParcialmenteRequest(Optional<String> title, Optional<String> description, Optional<TarefaStatusEnum> status) {};
+    // ----- FIM DTOs
 
     private List<Tarefa> tarefas = new ArrayList<>();
 
 
     @GetMapping("/tarefas")
-    public List<Tarefa> getTarefas() {
-        return tarefas;
+    public List<TarefaResponse> getTarefas() {
+        return tarefas
+                .stream()
+                .map((tarefa) -> {
+                    return new TarefaResponse(
+                            tarefa.getId(),
+                            tarefa.getTitle(),
+                            tarefa.getDescription(),
+                            tarefa.getStatus()
+                    );
+                })
+                .toList();
     }
 
     @PostMapping("/tarefas")
-    public Tarefa postTarefas(@RequestBody TarefaRequest request) {
-        var tarefa = new Tarefa(tarefas.size()+1, request.title(), request.description(), request.status());
+    public Tarefa postTarefas(@RequestBody TarefaCriarRequest request) {
+        var tarefa = new Tarefa(
+                tarefas.size(),
+                request.title(),
+                request.description(),
+                request.status()
+        );
 
         tarefas.add(tarefa);
 
@@ -66,26 +85,56 @@ public class Application {
     }
 
     @PatchMapping("/tarefas/{id}")
-    public void atualizarParcialmenteTarefaPorId(int id, @RequestBody TarefaAtualizarParcialmenteRequest request) {
-        var tarefa = this.tarefas.stream().filter(v -> v.id() == id ).findFirst();
+    @ResponseStatus(HttpStatus.OK)
+    public String atualizarParcialmenteTarefaPorId(
+            @PathVariable int id,
+            @RequestBody TarefaAtualizarParcialmenteRequest request
+    ) {
+        Tarefa tarefa = this.tarefas
+                .stream()
+                .filter(v -> v.getId() == id )
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Tarefa não encontrada."));
 
-        if (tarefa.isEmpty()) {
-            throw new RuntimeException("Tarefa não encontrada.");
+        if (request.title() != null) {
+            tarefa.setTitle(request.title());
         }
 
+        if (request.description() != null) {
+            tarefa.setDescription(request.description());
+        }
 
+        if (request.status() != null) {
+            tarefa.setStatus(request.status());
+        }
+
+        return "Tarefa atualizada com sucesso.";
     }
 
 
     @GetMapping("/tarefas/{id}")
-    public Tarefa getTarefa(int id) {
-        var tarefa = this.tarefas.stream().filter(v -> v.id() == id ).findFirst();
+    public TarefaResponse getTarefa(@PathVariable  int id) {
+        var tarefa = this.tarefas.stream()
+                .filter(v -> v.getId() == id )
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Tarefa não encontrada."));
 
-        if (tarefa.isEmpty()) {
-            throw new RuntimeException("Tarefa não encontrada.");
-        }
+        return new TarefaResponse(
+                tarefa.getId(),
+                tarefa.getTitle(),
+                tarefa.getDescription(),
+                tarefa.getStatus()
+        );
+    }
 
-        return tarefa.get();
+
+    @DeleteMapping("/tarefas/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluirTarefa(@PathVariable int id) {
+        this.tarefas
+            .removeIf((tarefa) -> {
+                return tarefa.getId() == id;
+            });
     }
 
 }
